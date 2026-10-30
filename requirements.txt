@@ -97,6 +97,11 @@ setuptools==75.6.0
 google-cloud-aiplatform  # serving_framework/model_transfer.py
 torch                    # data_processing/audio_utils.py
 
+# --- server/ (FastAPI + PyTorch) ---
+fastapi<0.142  # 0.142+ requires opentelemetry-api>=1.44, conflicts with the pinned 1.30.0 above
+uvicorn
+httpx  # fastapi TestClient
+
 # --- notebooks ---
 transformers==4.50.3
 huggingface_hub<1.0  # from_pretrained_keras is gone in 1.0

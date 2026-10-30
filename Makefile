@@ -8,6 +8,10 @@ ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 IMAGE     ?= hear-serving
 PORT      ?= 8080
 MODEL_DIR ?= models/hear
+# PyTorch-модель для serve-torch: HF id (качается в HF cache) или локальная папка
+TORCH_MODEL ?= google/hear-pytorch
+# auto = cuda, затем mps, затем cpu
+DEVICE    ?= auto
 PY        ?= .venv/bin/python
 # tensorflow/serving публикуется только под amd64, на Apple Silicon идёт через эмуляцию
 PLATFORM  ?= linux/amd64
@@ -18,7 +22,7 @@ PY_PATH    := $(if $(findstring /,$(PY)),$(if $(filter /%,$(PY)),$(PY),$(ROOT)/$
 
 export HF_TOKEN
 
-.PHONY: download-model build serve serve-local
+.PHONY: download-model build serve serve-local serve-torch test-torch
 
 download-model:
 	$(PY_PATH) -c "from huggingface_hub import snapshot_download; snapshot_download('google/hear', local_dir='$(MODEL_PATH)')"
@@ -51,3 +55,11 @@ serve-local:
 	cd $(ROOT)/hear/python && \
 		AIP_HTTP_PORT=$(PORT) AIP_HEALTH_ROUTE=/health AIP_PREDICT_ROUTE=/predict MODEL_PATH=$(MODEL_PATH) \
 		$(PY_PATH) -m serving.server_local --alsologtostderr --verbosity=1
+
+# FastAPI + PyTorch (server/), тот же контракт /health и /predict. Swagger: http://localhost:$(PORT)/docs
+serve-torch:
+	cd $(ROOT) && HEAR_MODEL=$(TORCH_MODEL) HEAR_DEVICE=$(DEVICE) \
+		$(PY_PATH) -m uvicorn server.app:app --host 0.0.0.0 --port $(PORT)
+
+test-torch:
+	cd $(ROOT) && $(PY_PATH) -m unittest server.test_app

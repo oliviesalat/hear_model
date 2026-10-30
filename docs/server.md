@@ -94,6 +94,29 @@ curl http://localhost:8080/health
 (`AIP_STORAGE_URI`) через `gcloud`, а Vertex сам задаёт `AIP_HTTP_PORT`, `AIP_HEALTH_ROUTE`, `AIP_PREDICT_ROUTE`.
 `make serve` делает то же самое, но монтирует модель из локальной папки и задаёт переменные сам.
 
+## PyTorch-сервер без Docker (`server/`)
+
+FastAPI-сервер на [google/hear-pytorch](https://huggingface.co/google/hear-pytorch). Работает нативно
+на macOS (MPS), Linux (CUDA/CPU), без TF Serving и AVX. Контракт `/health` и `/predict` тот же, что ниже.
+
+```bash
+pip install -r requirements.txt
+make serve-torch                 # модель качается в HF cache при первом запуске (нужен HF_TOKEN)
+make serve-torch DEVICE=cpu      # auto (по умолчанию) = cuda → mps → cpu
+make test-torch                  # unit-тесты API, без модели
+```
+
+Swagger: `http://localhost:8080/docs`. Переменные: `TORCH_MODEL` (HF id или локальная папка), `DEVICE`, `PORT`.
+
+Отличия от TF-сервера:
+- `gcs_uri` не поддерживается: instance с ним получает ошибку.
+- Битое тело запроса (не JSON, нет `instances`) — `400`, а не `500`.
+- Все валидные instances считаются одним batch (по 32 за forward), а не по одному.
+
+Embeddings совпадают с TF SavedModel (cosine 1.0 на шуме, речеподобных сигналах, CPU и MPS).
+На вырожденных синтетических клипах (чистый синус, полная тишина) cosine около 0.97.
+`server/` импортирует preprocessing из `hear/python/data_processing/audio_utils.py`.
+
 ## Эндпоинты
 
 Пути задаются переменными окружения; локально они такие:

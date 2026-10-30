@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+.env
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights / data downloaded at runtime
+*.h5
+*.keras
+*.safetensors
+*.pt
+*.wav
+
+# Model downloaded via make download-model
+models/

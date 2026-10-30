@@ -90,14 +90,14 @@ class InlineModelRunnerTest(parameterized.TestCase):
 
     self.assertLen(model_signature_mock.call_args_list, 1)
     self.assertSameElements(
-        model_signature_mock.call_args[0][0].keys(),
+        model_signature_mock.call_args.kwargs.keys(),
         input_np_map.keys(),
         "Input tensor map keys don't match argument keys.",
     )
     self.assertTrue(
         all([
             tensor_equal(
-                model_signature_mock.call_args[0][0][key], input_tensor_map[key]
+                model_signature_mock.call_args.kwargs[key], input_tensor_map[key]
             )
             for key in input_tensor_map
         ]),
@@ -188,7 +188,7 @@ class InlineModelRunnerTest(parameterized.TestCase):
     ):
       self.assertTrue(
           all([
-              tensor_equal(call[0][0][key], input_tensor_map[key])
+              tensor_equal(call.kwargs[key], input_tensor_map[key])
               for key in input_tensor_map
           ]),
           "Tensor passed to model values do not match input.",

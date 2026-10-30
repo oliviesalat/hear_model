@@ -67,5 +67,10 @@ class InlineModelRunner(model_runner.ModelRunner):
           k: tf.convert_to_tensor(v) for k, v in model_input.items()
       }
 
-    result = self._model.signatures["serving_default"](tensor_input)
+    signature = self._model.signatures["serving_default"]
+    # Loaded signatures take named inputs as keyword-only arguments.
+    if isinstance(tensor_input, dict):
+      result = signature(**tensor_input)
+    else:
+      result = signature(tensor_input)
     return {k: result[k].numpy() for k in model_output_keys}

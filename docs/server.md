@@ -26,9 +26,13 @@ TF Serving под macOS нативно не ставится, поэтому с�
 
 ### Что нужно
 
-- Docker (Docker Desktop / OrbStack). Образ `tensorflow/serving` есть только под `amd64`,
-  на Apple Silicon он работает через эмуляцию: медленнее, но работает.
-  В Docker Desktop включи *Use Rosetta for x86_64/amd64 emulation*.
+- Docker на x86_64-машине с AVX (`grep -o -w 'avx\|avx2' /proc/cpuinfo | sort -u`).
+  Образ `tensorflow/serving` есть только под `amd64`, а `tensorflow_model_server` и `tensorflow` 2.18
+  собраны с AVX.
+- Apple Silicon: эмуляция через Rosetta не даёт контейнеру AVX, поэтому `make build` проходит,
+  а запуск падает с `Illegal instruction`. В Docker Desktop выключи
+  *Use Rosetta for x86_64/amd64 emulation*: тогда эмулирует QEMU, у него AVX есть
+  (не проверено, и будет очень медленно). Надёжнее запускать на Linux x86_64.
 - Доступ к модели на Hugging Face: модель [google/hear](https://huggingface.co/google/hear) gated —
   прими условия на странице модели и создай token.
 - Python-окружение с зависимостями: `pip install -r requirements.txt` (нужен `huggingface_hub`).

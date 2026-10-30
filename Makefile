@@ -6,6 +6,7 @@ ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 -include $(ROOT)/.env
 
 IMAGE     ?= hear-serving
+TORCH_IMAGE ?= hear-torch
 PORT      ?= 8080
 MODEL_DIR ?= models/hear
 # PyTorch-модель для serve-torch: HF id (качается в HF cache) или локальная папка
@@ -22,7 +23,7 @@ PY_PATH    := $(if $(findstring /,$(PY)),$(if $(filter /%,$(PY)),$(PY),$(ROOT)/$
 
 export HF_TOKEN
 
-.PHONY: download-model build serve serve-local serve-torch test-torch
+.PHONY: download-model build serve serve-local serve-torch test-torch build-torch serve-torch-docker
 
 download-model:
 	$(PY_PATH) -c "from huggingface_hub import snapshot_download; snapshot_download('google/hear', local_dir='$(MODEL_PATH)')"
@@ -63,3 +64,14 @@ serve-torch:
 
 test-torch:
 	cd $(ROOT) && $(PY_PATH) -m unittest server.test_app
+
+# PyTorch-сервер в Docker: нативная архитектура хоста (arm64 на Mac), CPU (MPS в Docker недоступен).
+build-torch:
+	docker build -t $(TORCH_IMAGE) -f $(ROOT)/server/Dockerfile $(ROOT)
+
+# Локальная папка TORCH_MODEL монтируется в /model, иначе HF id качается в volume hear-hf-cache.
+TORCH_MODEL_DIR := $(firstword $(wildcard $(abspath $(if $(filter /%,$(TORCH_MODEL)),$(TORCH_MODEL),$(ROOT)/$(TORCH_MODEL)))/config.json))
+serve-torch-docker: build-torch
+	docker run --rm --init -p $(PORT):8080 -e HF_TOKEN \
+		$(if $(TORCH_MODEL_DIR),-v $(dir $(TORCH_MODEL_DIR)):/model:ro -e HEAR_MODEL=/model,-v hear-hf-cache:/cache/huggingface -e HEAR_MODEL=$(TORCH_MODEL)) \
+		$(TORCH_IMAGE)

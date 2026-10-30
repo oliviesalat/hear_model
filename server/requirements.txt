@@ -1,0 +1,9 @@
+# Runtime deps of server/ only (the Docker image). Dev/notebooks: root requirements.txt.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.12.1  # CPU wheel in Docker: no CUDA libs, x86_64 and aarch64
+transformers==4.50.3
+huggingface_hub<1.0
+numpy==2.0.2
+scipy==1.14.1
+fastapi<0.142
+uvicorn

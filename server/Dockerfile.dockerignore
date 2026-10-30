@@ -1,0 +1,7 @@
+# Context is the repo root (models/, .venv/ are GBs): allowlist only what the image needs.
+*
+!server/
+!hear/python/data_processing/__init__.py
+!hear/python/data_processing/audio_utils.py
+**/__pycache__
+server/test_app.py

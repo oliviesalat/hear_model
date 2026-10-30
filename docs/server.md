@@ -108,6 +108,15 @@ make test-torch                  # unit-тесты API, без модели
 
 Swagger: `http://localhost:8080/docs`. Переменные: `TORCH_MODEL` (HF id или локальная папка), `DEVICE`, `PORT`.
 
+В Docker (`server/Dockerfile`, CPU-сборка torch, нативная архитектура хоста, на Mac — arm64 без эмуляции):
+
+```bash
+make serve-torch-docker                                # модель качается в volume hear-hf-cache
+make serve-torch-docker TORCH_MODEL=models/hear-pytorch  # локальная папка монтируется в /model
+```
+
+GPU в контейнере нет: на Mac Docker не пробрасывает MPS, поэтому внутри Docker медленнее, чем `make serve-torch` нативно.
+
 Отличия от TF-сервера:
 - `gcs_uri` не поддерживается: instance с ним получает ошибку.
 - Битое тело запроса (не JSON, нет `instances`) — `400`, а не `500`.

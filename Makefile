@@ -1,5 +1,5 @@
-# HeAR: локальный inference-сервер. Подробности: docs/server.md
-# Пути считаются от папки Makefile, запускать можно откуда угодно: make -C <repo> serve
+# HeAR: local inference server. Details: docs/server.md
+# Paths are relative to the Makefile folder, so it runs from anywhere: make -C <repo> serve
 
 ROOT := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
@@ -9,15 +9,15 @@ IMAGE     ?= hear-serving
 TORCH_IMAGE ?= hear-torch
 PORT      ?= 8080
 MODEL_DIR ?= models/hear
-# PyTorch-модель для serve-torch: HF id (качается в HF cache) или локальная папка
+# PyTorch model for serve-torch: HF id (downloaded into the HF cache) or a local folder
 TORCH_MODEL ?= google/hear-pytorch
-# auto = cuda, затем mps, затем cpu
+# auto = cuda, then mps, then cpu
 DEVICE    ?= auto
 PY        ?= .venv/bin/python
-# tensorflow/serving публикуется только под amd64, на Apple Silicon идёт через эмуляцию
+# tensorflow/serving is published for amd64 only and needs AVX (Rosetta emulation lacks it)
 PLATFORM  ?= linux/amd64
 
-# Относительные пути из .env/командной строки — от корня репо
+# Relative paths from .env or the command line are resolved from the repo root
 MODEL_PATH := $(abspath $(if $(filter /%,$(MODEL_DIR)),$(MODEL_DIR),$(ROOT)/$(MODEL_DIR)))
 PY_PATH    := $(if $(findstring /,$(PY)),$(if $(filter /%,$(PY)),$(PY),$(ROOT)/$(PY)),$(PY))
 
@@ -31,10 +31,10 @@ download-model:
 build:
 	docker build --platform $(PLATFORM) -t $(IMAGE) -f $(ROOT)/hear/python/serving/Dockerfile $(ROOT)/hear
 
-# Повторяет hear/python/serving/entrypoint.sh, но берёт модель из локальной папки вместо GCS.
-# -w /: пакеты serving/ и data_processing/ лежат в корне образа.
+# Mirrors hear/python/serving/entrypoint.sh, but takes the model from a local folder instead of GCS.
+# -w /: the serving/ and data_processing/ packages live in the image root.
 serve: build
-	@test -f $(MODEL_PATH)/saved_model.pb || { echo "Нет модели в $(MODEL_PATH), запусти: make download-model"; exit 1; }
+	@test -f $(MODEL_PATH)/saved_model.pb || { echo "No model in $(MODEL_PATH), run: make download-model"; exit 1; }
 	docker run --rm --init --platform $(PLATFORM) -w / \
 		-p $(PORT):8080 \
 		-e AIP_HTTP_PORT=8080 \
@@ -49,15 +49,15 @@ serve: build
 			/server-env/bin/python3.12 -m serving.server_gunicorn --alsologtostderr --verbosity=1 & \
 			wait -n'
 
-# Без Docker и TF Serving: модель грузится in-process (serving/server_local.py).
-# Работает нативно на macOS arm64. Нужен $(PY) с root requirements.txt.
+# No Docker, no TF Serving: the model runs in-process (serving/server_local.py).
+# Runs natively on macOS arm64. Needs $(PY) with the root requirements.txt.
 serve-local:
-	@test -f $(MODEL_PATH)/saved_model.pb || { echo "Нет модели в $(MODEL_PATH), запусти: make download-model"; exit 1; }
+	@test -f $(MODEL_PATH)/saved_model.pb || { echo "No model in $(MODEL_PATH), run: make download-model"; exit 1; }
 	cd $(ROOT)/hear/python && \
 		AIP_HTTP_PORT=$(PORT) AIP_HEALTH_ROUTE=/health AIP_PREDICT_ROUTE=/predict MODEL_PATH=$(MODEL_PATH) \
 		$(PY_PATH) -m serving.server_local --alsologtostderr --verbosity=1
 
-# FastAPI + PyTorch (server/), тот же контракт /health и /predict. Swagger: http://localhost:$(PORT)/docs
+# FastAPI + PyTorch (server/), same /health and /predict contract. Swagger: http://localhost:$(PORT)/docs
 serve-torch:
 	cd $(ROOT) && HEAR_MODEL=$(TORCH_MODEL) HEAR_DEVICE=$(DEVICE) \
 		$(PY_PATH) -m uvicorn server.app:app --host 0.0.0.0 --port $(PORT)
@@ -65,11 +65,11 @@ serve-torch:
 test-torch:
 	cd $(ROOT) && $(PY_PATH) -m unittest server.test_app
 
-# PyTorch-сервер в Docker: нативная архитектура хоста (arm64 на Mac), CPU (MPS в Docker недоступен).
+# PyTorch server in Docker: native host architecture (arm64 on a Mac), CPU only (no MPS in Docker).
 build-torch:
 	docker build -t $(TORCH_IMAGE) -f $(ROOT)/server/Dockerfile $(ROOT)
 
-# Локальная папка TORCH_MODEL монтируется в /model, иначе HF id качается в volume hear-hf-cache.
+# A local TORCH_MODEL folder is mounted at /model; an HF id is downloaded into the hear-hf-cache volume.
 TORCH_MODEL_DIR := $(firstword $(wildcard $(abspath $(if $(filter /%,$(TORCH_MODEL)),$(TORCH_MODEL),$(ROOT)/$(TORCH_MODEL)))/config.json))
 serve-torch-docker: build-torch
 	docker run --rm --init -p $(PORT):8080 -e HF_TOKEN \

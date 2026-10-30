@@ -18,7 +18,7 @@ PY_PATH    := $(if $(findstring /,$(PY)),$(if $(filter /%,$(PY)),$(PY),$(ROOT)/$
 
 export HF_TOKEN
 
-.PHONY: download-model build serve
+.PHONY: download-model build serve serve-local
 
 download-model:
 	$(PY_PATH) -c "from huggingface_hub import snapshot_download; snapshot_download('google/hear', local_dir='$(MODEL_PATH)')"
@@ -43,3 +43,11 @@ serve: build
 				--xla_cpu_compilation_enabled=true & \
 			/server-env/bin/python3.12 -m serving.server_gunicorn --alsologtostderr --verbosity=1 & \
 			wait -n'
+
+# Без Docker и TF Serving: модель грузится in-process (serving/server_local.py).
+# Работает нативно на macOS arm64. Нужен $(PY) с root requirements.txt.
+serve-local:
+	@test -f $(MODEL_PATH)/saved_model.pb || { echo "Нет модели в $(MODEL_PATH), запусти: make download-model"; exit 1; }
+	cd $(ROOT)/hear/python && \
+		AIP_HTTP_PORT=$(PORT) AIP_HEALTH_ROUTE=/health AIP_PREDICT_ROUTE=/predict MODEL_PATH=$(MODEL_PATH) \
+		$(PY_PATH) -m serving.server_local --alsologtostderr --verbosity=1

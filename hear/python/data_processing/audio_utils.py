@@ -375,9 +375,10 @@ def _mel_pcen(
 ) -> torch.Tensor:
   """Melspec followed by pcen."""
   x = x.float()
-  # Scale to -1, 1 range
-  x -= torch.min(x)
-  x = x / (torch.max(x) + 1e-8)
+  # Scale each clip to -1, 1 range. Per clip, not per batch: otherwise clips in
+  # one batch change each other's embeddings (the TF SavedModel scales per clip).
+  x = x - torch.amin(x, dim=-1, keepdim=True)
+  x = x / (torch.amax(x, dim=-1, keepdim=True) + 1e-8)
   x = (x * 2) - 1
 
   frame_length = 16 * 25

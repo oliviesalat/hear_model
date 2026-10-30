@@ -110,6 +110,11 @@ curl http://localhost:8080/health
 
 ### `POST /predict`
 
+**Это и есть эндпоинт для получения embedding.** HeAR — encoder-модель: её «prediction» и есть embedding, другого эндпоинта нет.
+Название `predict` взято из контракта Vertex AI: Vertex шлёт запросы на роут из `AIP_PREDICT_ROUTE`
+в формате `{"instances": [...]}` → `{"predictions": [...]}`. Локально путь можно поменять, например
+`-e AIP_PREDICT_ROUTE=/embed` в Makefile; на Vertex он всё равно задаётся самим Vertex.
+
 `Content-Type: application/json`. Тело — объект с массивом `instances`, по одному аудиоклипу на элемент:
 
 ```json

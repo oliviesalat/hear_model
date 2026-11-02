@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HeAR Embedding Demo</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb; --card: #ffffff; --border: #e3e2de;
+    --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #8a8984;
+    --grid: #ecebe7; --axis: #c9c8c2; --series-1: #2a78d6;
+    --good: #1a7f37; --critical: #c62828; --drop-active: #eaf2fc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface: #1a1a19; --card: #232322; --border: #3a3a38;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #8f8e86;
+      --grid: #2e2e2c; --axis: #4a4a47; --series-1: #3987e5;
+      --good: #4ac26b; --critical: #ef6b6b; --drop-active: #1f2c3d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--surface); color: var(--text-primary);
+    font: 15px/1.5 system-ui, -apple-system, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--text-secondary); margin: 0 0 24px; }
+  #drop {
+    display: block; border: 2px dashed var(--axis); border-radius: 12px; padding: 40px 16px;
+    text-align: center; cursor: pointer; background: var(--card); transition: background .15s;
+  }
+  #drop.active { background: var(--drop-active); border-color: var(--series-1); }
+  #drop strong { display: block; font-size: 17px; }
+  #drop span { color: var(--text-secondary); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  .kv { min-width: 110px; }
+  .kv .k { color: var(--text-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kv .v { font-variant-numeric: tabular-nums; }
+  #status { font-weight: 600; }
+  #status.ok { color: var(--good); }
+  #status.err { color: var(--critical); }
+  #status.ok::before { content: "✓ "; }
+  #status.err::before { content: "✕ "; }
+  #status.busy::before { content: "… "; }
+  #checks { list-style: none; padding: 0; margin: 12px 0 0; font-size: 14px; }
+  #checks li.pass::before { content: "✓ "; color: var(--good); }
+  #checks li.fail::before { content: "✕ "; color: var(--critical); }
+  .chart-wrap { position: relative; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { fill: var(--text-secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+  #tip {
+    position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 8px; font-size: 12px; white-space: nowrap; display: none;
+    font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  textarea {
+    width: 100%; height: 140px; margin-top: 8px; resize: vertical; background: var(--surface);
+    color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px;
+    font: 12px/1.4 ui-monospace, monospace; padding: 8px;
+  }
+  button {
+    font: inherit; font-size: 13px; padding: 4px 12px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-primary);
+  }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>HeAR embedding</h1>
+  <p class="sub">Drop a WAV. The server embeds it the same way as the PyTorch quick start notebook: resample to 16 kHz mono, first 2 s, zero-pad if shorter.</p>
+
+  <label id="drop">
+    <strong>Drop a .wav file here</strong>
+    <span>or click to choose. Any sample rate, channel count and length.</span>
+    <input id="file" type="file" accept=".wav,audio/wav,audio/x-wav" hidden>
+  </label>
+
+  <section class="card" id="info" hidden>
+    <div class="row">
+      <div class="kv"><div class="k">Status</div><div class="v" id="status"></div></div>
+      <div class="kv"><div class="k">File</div><div class="v" id="fname"></div></div>
+      <div class="kv"><div class="k">Format</div><div class="v" id="fmt"></div></div>
+      <div class="kv"><div class="k">Request</div><div class="v" id="latency">—</div></div>
+    </div>
+    <ul id="checks"></ul>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <div class="row" id="stats"></div>
+    <div class="chart-wrap" style="margin-top:12px">
+      <svg id="chart" viewBox="0 0 900 300" role="img" aria-label="Embedding vector, value by index"></svg>
+      <div id="tip"></div>
+    </div>
+    <details style="margin-top:12px">
+      <summary>Raw embedding (512 floats) <button id="copy" type="button">Copy JSON</button></summary>
+      <textarea id="raw" readonly></textarea>
+    </details>
+  </section>
+</main>
+
+<script>
+// The server embeds the WAV exactly like quick_start_with_hugging_face_pytorch.ipynb: resamples
+// the whole file to 16 kHz mono, keeps the first 2 s and zero-pads shorter audio.
+const CLIP_SECONDS = 2;
+
+const $ = (id) => document.getElementById(id);
+const drop = $("drop"), fileInput = $("file");
+
+drop.addEventListener("dragover", (event) => { event.preventDefault(); drop.classList.add("active"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("active"));
+drop.addEventListener("drop", (event) => {
+  event.preventDefault();
+  drop.classList.remove("active");
+  if (event.dataTransfer.files[0]) handleFile(event.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", () => fileInput.files[0] && handleFile(fileInput.files[0]));
+
+function setStatus(text, kind) {
+  const status = $("status");
+  status.textContent = text;
+  status.className = kind;
+}
+
+async function handleFile(file) {
+  $("info").hidden = false;
+  $("result").hidden = true;
+  $("fname").textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+  $("fmt").textContent = "—";
+  $("latency").textContent = "—";
+  $("checks").innerHTML = "";
+
+  setStatus("Waiting for /demo/predict", "busy");
+  const started = performance.now();
+  try {
+    const response = await fetch("/demo/predict", { method: "POST", headers: { "Content-Type": "audio/wav" }, body: file });
+    $("latency").textContent = `${Math.round(performance.now() - started)} ms · HTTP ${response.status}`;
+    const body = await response.json();
+    if (!response.ok) return setStatus(body.detail ?? body.error ?? `HTTP ${response.status}`, "err");
+    const { sample_rate: sampleRate, channels, seconds, embedding } = body;
+    $("fmt").textContent = `${sampleRate} Hz · ${channels === 1 ? "mono" : `${channels} ch`} · ${seconds.toFixed(3)} s`;
+    const fit = seconds < CLIP_SECONDS ? `Zero-padded by ${(CLIP_SECONDS - seconds).toFixed(3)} s after resampling`
+      : seconds > CLIP_SECONDS ? `Only the first 2 s embedded (${(seconds - CLIP_SECONDS).toFixed(3)} s ignored)`
+      : "Exactly 2 s";
+    $("checks").innerHTML = `<li class="pass">${fit}</li>`;
+    setStatus(`OK · ${embedding.length} values`, "ok");
+    showEmbedding(embedding);
+  } catch (error) {
+    setStatus(`Request failed: ${error.message}`, "err");
+  }
+}
+
+function showEmbedding(embedding) {
+  $("result").hidden = false;
+  const min = Math.min(...embedding), max = Math.max(...embedding);
+  const mean = embedding.reduce((sum, value) => sum + value, 0) / embedding.length;
+  const norm = Math.hypot(...embedding);
+  $("stats").innerHTML = [["Size", embedding.length], ["Min", min.toFixed(3)], ["Max", max.toFixed(3)],
+    ["Mean", mean.toFixed(3)], ["L2 norm", norm.toFixed(3)]]
+    .map(([key, value]) => `<div class="kv"><div class="k">${key}</div><div class="v">${value}</div></div>`).join("");
+  $("raw").value = JSON.stringify(embedding);
+  drawChart(embedding, min, max);
+}
+
+$("copy").addEventListener("click", (event) => {
+  event.preventDefault();
+  navigator.clipboard.writeText($("raw").value);
+  event.target.textContent = "Copied";
+  setTimeout(() => (event.target.textContent = "Copy JSON"), 1200);
+});
+
+function niceTicks(min, max, count = 6) {
+  const rawStep = (max - min) / count || 1;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const step = [1, 2, 5, 10].map((m) => m * magnitude).find((s) => s >= rawStep);
+  const ticks = [];
+  for (let tick = Math.floor(min / step) * step; tick <= max + step / 2; tick += step) ticks.push(+tick.toPrecision(12));
+  return ticks;
+}
+
+function drawChart(embedding, min, max) {
+  const width = 900, height = 300, left = 48, right = 12, top = 12, bottom = 32;
+  const yTicks = niceTicks(Math.min(min, 0), Math.max(max, 0));
+  const yLow = yTicks[0], yHigh = yTicks[yTicks.length - 1];
+  const x = (index) => left + index / (embedding.length - 1) * (width - left - right);
+  const y = (value) => top + (yHigh - value) / (yHigh - yLow) * (height - top - bottom);
+  const xTicks = [0, 100, 200, 300, 400, 500].filter((tick) => tick < embedding.length);
+
+  const svg = $("chart");
+  svg.innerHTML = `
+    ${yTicks.map((tick) => `<line x1="${left}" x2="${width - right}" y1="${y(tick)}" y2="${y(tick)}"
+        stroke="var(${tick === 0 ? "--axis" : "--grid"})" />
+      <text x="${left - 8}" y="${y(tick) + 4}" text-anchor="end">${tick}</text>`).join("")}
+    ${xTicks.map((tick) => `<text x="${x(tick)}" y="${height - 10}" text-anchor="middle">${tick}</text>`).join("")}
+    <polyline fill="none" stroke="var(--series-1)" stroke-width="1.5" stroke-linejoin="round"
+      points="${embedding.map((value, index) => `${x(index)},${y(value)}`).join(" ")}" />
+    <line id="cross" y1="${top}" y2="${height - bottom}" stroke="var(--axis)" visibility="hidden" />
+    <circle id="dot" r="4" fill="var(--series-1)" stroke="var(--card)" stroke-width="2" visibility="hidden" />
+    <rect x="${left}" y="${top}" width="${width - left - right}" height="${height - top - bottom}" fill="transparent" id="hit" />`;
+
+  const tip = $("tip"), cross = $("cross"), dot = $("dot"), hit = $("hit");
+  hit.addEventListener("mousemove", (event) => {
+    const box = svg.getBoundingClientRect();
+    const svgX = (event.clientX - box.left) * width / box.width;
+    const index = Math.max(0, Math.min(embedding.length - 1,
+      Math.round((svgX - left) / (width - left - right) * (embedding.length - 1))));
+    const pointX = x(index), pointY = y(embedding[index]);
+    cross.setAttribute("x1", pointX); cross.setAttribute("x2", pointX);
+    dot.setAttribute("cx", pointX); dot.setAttribute("cy", pointY);
+    cross.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+    tip.style.display = "block";
+    tip.textContent = `#${index}: ${embedding[index].toFixed(4)}`;
+    const tipLeft = pointX * box.width / width;
+    tip.style.left = `${Math.min(tipLeft + 10, box.width - tip.offsetWidth)}px`;
+    tip.style.top = `${pointY * box.height / height - 32}px`;
+  });
+  hit.addEventListener("mouseleave", () => {
+    tip.style.display = "none";
+    cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+  });
+}
+</script>
+</body>
+</html>

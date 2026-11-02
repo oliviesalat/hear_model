@@ -43,6 +43,11 @@ class PredictTest(unittest.TestCase):
         response = self.client.get("/health")
         self.assertEqual((response.status_code, response.text), (200, "ok"))
 
+    def test_demo_page(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/predict", response.text)
+
     def test_bad_instances_keep_order_and_good_ones_share_one_batch(self) -> None:
         predictions = self.predict({"instances": [
             {"input_array": [0.25] * 32000},
@@ -66,6 +71,24 @@ class PredictTest(unittest.TestCase):
         predictions = self.predict({"instances": [{"input_bytes": wav_base64(stereo, 8000)}]})
         self.assertAlmostEqual(predictions[0]["embedding"][0], 0.5, places=3)
         self.assertEqual(self.embedder.batches[0].shape, (1, 32000))
+
+    def test_demo_short_stereo_wav_is_resampled_then_zero_padded(self) -> None:
+        stereo = np.full((8000, 2), [8192, 24576], dtype=np.int16)  # 1 s at 8 kHz
+        buffer = io.BytesIO()
+        wavfile.write(buffer, 8000, stereo)
+        response = self.client.post("/demo/predict", content=buffer.getvalue(),
+                                    headers={"Content-Type": "audio/wav"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual((response.json()["sample_rate"], response.json()["channels"]), (8000, 2))
+        clip = self.embedder.batches[0][0]
+        self.assertEqual(clip.shape, (32000,))
+        self.assertAlmostEqual(clip[100], 16384, delta=1)  # mono mean, int scale kept like the notebook
+        self.assertEqual(clip[16000:].tolist(), [0.0] * 16000)
+
+    def test_demo_rejects_non_wav(self) -> None:
+        response = self.client.post("/demo/predict", content=b"not a wav", headers={"Content-Type": "audio/wav"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.embedder.batches, [])
 
     def test_all_instances_bad_skips_model(self) -> None:
         self.predict({"instances": [{"input_array": [0.0]}]})

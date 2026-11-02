@@ -3,11 +3,13 @@
 import base64
 import binascii
 import io
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
+
+from hear.python.data_processing.audio_utils import resample_audio_and_convert_to_mono
 
 SAMPLE_RATE = 16000
 CLIP_SAMPLES = 2 * SAMPLE_RATE
@@ -76,3 +78,40 @@ def _check_length(clip: np.ndarray) -> np.ndarray:
             f"Got {clip.shape[0]} samples."
         )
     return clip
+
+
+class NotebookClip(NamedTuple):
+    clip: np.ndarray
+    """float32, shape (CLIP_SAMPLES,)."""
+    sample_rate: int
+    channels: int
+    seconds: float
+    """Duration of the source file."""
+
+
+def wav_to_notebook_clip(wav: bytes) -> NotebookClip:
+    """Turns a WAV into a clip the way quick_start_with_hugging_face_pytorch.ipynb does.
+
+    Unlike instance_to_clip (the /predict contract, which rejects anything but 2 s), this
+    resamples the whole file first, keeps the first 2 s and zero-pads shorter audio after
+    resampling, so the demo page reproduces the notebook's embedding exactly.
+
+    Args:
+        wav: Raw bytes of a WAV file of any length, sample rate and channel count.
+
+    Returns:
+        The clip plus the source file's sample rate, channel count and duration.
+
+    Raises:
+        InstanceError: The bytes are not a readable WAV file.
+    """
+    try:
+        sample_rate, audio = wavfile.read(io.BytesIO(wav))
+    except ValueError as error:
+        raise InstanceError("Body must be a WAV file.") from error
+    channels = 1 if audio.ndim == 1 else audio.shape[1]
+    resampled = resample_audio_and_convert_to_mono(audio, sample_rate, SAMPLE_RATE)[:CLIP_SAMPLES]
+    # The notebook keeps the int scale; preprocess_audio min-max scales each clip to [-1, 1], so it does not matter.
+    clip = np.zeros(CLIP_SAMPLES, dtype=np.float32)
+    clip[: len(resampled)] = resampled
+    return NotebookClip(clip, sample_rate, channels, len(audio) / sample_rate)

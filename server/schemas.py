@@ -18,6 +18,13 @@ class EmbeddingResult(BaseModel):
     embedding: list[float] = Field(description="HeAR embedding, 512 floats.")
 
 
+class DemoResult(BaseModel):
+    embedding: list[float] = Field(description="HeAR embedding, 512 floats.")
+    sample_rate: int = Field(description="Sample rate of the uploaded WAV.")
+    channels: int = Field(description="Channel count of the uploaded WAV.")
+    seconds: float = Field(description="Duration of the uploaded WAV; only the first 2 s are embedded.")
+
+
 class ErrorDetail(BaseModel):
     description: str = Field(description="Why this instance failed.")
 

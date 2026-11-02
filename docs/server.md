@@ -126,6 +126,11 @@ make test-torch                  # API unit tests, no model needed
 ```
 
 Swagger UI: `http://localhost:8080/docs`.
+Demo page: `http://localhost:8080/`. Drop in a WAV of any length and see the embedding plotted.
+The page posts the file to `POST /demo/predict` (raw WAV body, not part of the API contract), which embeds it
+exactly like `hear/notebooks/quick_start_with_hugging_face_pytorch.ipynb`: resample the whole file to 16 kHz mono,
+keep the first 2 s, zero-pad shorter audio. On CPU the embedding is bit-identical to the notebook's;
+on MPS it differs by float noise (~1e-4). `/predict` instead rejects clips that are not exactly 2 s, like upstream.
 
 In Docker (`server/Dockerfile`: CPU build of torch, native host architecture, arm64 on a Mac with no emulation):
 

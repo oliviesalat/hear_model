@@ -26,3 +26,6 @@ venv/
 
 # Model downloaded via make download-model
 models/
+
+# Datasets downloaded via make download-*
+data/

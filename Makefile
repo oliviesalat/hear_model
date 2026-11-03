@@ -16,17 +16,40 @@ DEVICE    ?= auto
 PY        ?= .venv/bin/python
 # tensorflow/serving is published for amd64 only and needs AVX (Rosetta emulation lacks it)
 PLATFORM  ?= linux/amd64
+DATA_DIR  ?= data
 
 # Relative paths from .env or the command line are resolved from the repo root
 MODEL_PATH := $(abspath $(if $(filter /%,$(MODEL_DIR)),$(MODEL_DIR),$(ROOT)/$(MODEL_DIR)))
+DATA_PATH  := $(abspath $(if $(filter /%,$(DATA_DIR)),$(DATA_DIR),$(ROOT)/$(DATA_DIR)))
 PY_PATH    := $(if $(findstring /,$(PY)),$(if $(filter /%,$(PY)),$(PY),$(ROOT)/$(PY)),$(PY))
 
 export HF_TOKEN
 
-.PHONY: download-model build serve serve-local serve-torch test-torch build-torch serve-torch-docker
+.PHONY: download-model download-coughvid analyze-coughvid build serve serve-local serve-torch test-torch build-torch serve-torch-docker
 
 download-model:
 	$(PY_PATH) -c "from huggingface_hub import snapshot_download; snapshot_download('google/hear', local_dir='$(MODEL_PATH)')"
+
+# COUGHVID v3 (https://zenodo.org/records/7024894), extracted into $(DATA_DIR)/coughvid.
+# Python zipfile, not unzip: macOS unzip 6.0 fails on this zip64 archive (>65535 entries).
+COUGHVID_URL := https://zenodo.org/records/7024894/files/public_dataset_v3.zip?download=1
+COUGHVID_MD5 := 7c6cdf184748a2600538c331ba0ba718
+COUGHVID_ZIP := $(DATA_PATH)/coughvid_v3.zip
+
+download-coughvid:
+	@mkdir -p $(DATA_PATH)/coughvid
+	@test -f $(COUGHVID_ZIP) || { curl -fL --retry 3 -o $(COUGHVID_ZIP).part '$(COUGHVID_URL)' && mv $(COUGHVID_ZIP).part $(COUGHVID_ZIP); }
+	@sum=$$(md5 -q $(COUGHVID_ZIP) 2>/dev/null || md5sum $(COUGHVID_ZIP) | cut -d' ' -f1); \
+		test "$$sum" = $(COUGHVID_MD5) || { echo "Bad md5 $$sum, delete $(COUGHVID_ZIP) and retry"; exit 1; }
+	$(PY_PATH) -m zipfile -e $(COUGHVID_ZIP) $(DATA_PATH)/coughvid
+
+COUGHVID_DIR := $(DATA_PATH)/coughvid/coughvid_20211012
+
+# Annotation tables: analysis/coughvid/*.csv and $(DATA_DIR)/coughvid/annotations.csv
+analyze-coughvid:
+	@test -d $(COUGHVID_DIR) || { echo "No dataset in $(COUGHVID_DIR), run: make download-coughvid"; exit 1; }
+	$(PY_PATH) $(ROOT)/scripts/coughvid_annotations.py --dataset-dir $(COUGHVID_DIR) \
+		--out-dir $(ROOT)/analysis/coughvid --table $(DATA_PATH)/coughvid/annotations.csv
 
 build:
 	docker build --platform $(PLATFORM) -t $(IMAGE) -f $(ROOT)/hear/python/serving/Dockerfile $(ROOT)/hear

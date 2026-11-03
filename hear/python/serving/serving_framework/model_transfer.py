@@ -46,9 +46,10 @@ _LOCAL_PATH = flags.DEFINE_string(
 
 
 def main(argv: Sequence[str]) -> None:
-  if len(argv) > 1:
-    raise app.UsageError("Too many command-line arguments.")
-  gcs_utils.download_from_gcs(_GCS_PATH.value, _LOCAL_PATH.value)
+    if len(argv) > 1:
+        raise app.UsageError("Too many command-line arguments.")
+    gcs_utils.download_from_gcs(_GCS_PATH.value, _LOCAL_PATH.value)
+
 
 if __name__ == "__main__":
-  app.run(main)
+    app.run(main)

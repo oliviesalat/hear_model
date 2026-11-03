@@ -29,48 +29,46 @@ from serving.serving_framework import model_runner
 
 
 class InlineModelRunner(model_runner.ModelRunner):
-  """ModelRunner implementation using in-process tensorflow."""
+    """ModelRunner implementation using in-process tensorflow."""
 
-  def __init__(self, model: tf.train.Checkpoint):
-    self._model = model
+    def __init__(self, model: tf.train.Checkpoint):
+        self._model = model
 
-  @override
-  def run_model_multiple_output(
-      self,
-      model_input: Mapping[str, np.ndarray] | np.ndarray,
-      *,
-      model_name: str = "default",
-      model_version: int | None = None,
-      model_output_keys: Set[str],
-  ) -> Mapping[str, np.ndarray]:
-    """Runs a model on the given input and returns multiple outputs.
+    @override
+    def run_model_multiple_output(
+        self,
+        model_input: Mapping[str, np.ndarray] | np.ndarray,
+        *,
+        model_name: str = "default",
+        model_version: int | None = None,
+        model_output_keys: Set[str],
+    ) -> Mapping[str, np.ndarray]:
+        """Runs a model on the given input and returns multiple outputs.
 
-    Args:
-      model_input: An array or map of arrays comprising the input tensors for
-        the model.
-      model_name: The name of the model to run.
-      model_version: The version of the model to run. Uses default if None.
-      model_output_keys: The desired model output keys.
+        Args:
+          model_input: An array or map of arrays comprising the input tensors for
+            the model.
+          model_name: The name of the model to run.
+          model_version: The version of the model to run. Uses default if None.
+          model_output_keys: The desired model output keys.
 
-    Returns:
-      A mapping of model output keys to tensors.
-    """
-    if model_name != "default" or model_version is not None:
-      raise NotImplementedError(
-          "InlineModelRunner does not support multiple models."
-      )
-    del model_name, model_version
-    if isinstance(model_input, np.ndarray):
-      tensor_input = tf.convert_to_tensor(model_input)
-    else:
-      tensor_input = {
-          k: tf.convert_to_tensor(v) for k, v in model_input.items()
-      }
+        Returns:
+          A mapping of model output keys to tensors.
+        """
+        if model_name != "default" or model_version is not None:
+            raise NotImplementedError(
+                "InlineModelRunner does not support multiple models."
+            )
+        del model_name, model_version
+        if isinstance(model_input, np.ndarray):
+            tensor_input = tf.convert_to_tensor(model_input)
+        else:
+            tensor_input = {k: tf.convert_to_tensor(v) for k, v in model_input.items()}
 
-    signature = self._model.signatures["serving_default"]
-    # Loaded signatures take named inputs as keyword-only arguments.
-    if isinstance(tensor_input, dict):
-      result = signature(**tensor_input)
-    else:
-      result = signature(tensor_input)
-    return {k: result[k].numpy() for k in model_output_keys}
+        signature = self._model.signatures["serving_default"]
+        # Loaded signatures take named inputs as keyword-only arguments.
+        if isinstance(tensor_input, dict):
+            result = signature(**tensor_input)
+        else:
+            result = signature(tensor_input)
+        return {k: result[k].numpy() for k in model_output_keys}

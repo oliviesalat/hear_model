@@ -20,33 +20,33 @@ from serving import predictor
 
 
 def _load_model_runner() -> inline_model_runner.InlineModelRunner:
-  # Imported here: the runner is built post-fork in the gunicorn worker.
-  import tensorflow as tf  # pylint: disable=g-import-not-at-top
+    # Imported here: the runner is built post-fork in the gunicorn worker.
+    import tensorflow as tf  # pylint: disable=g-import-not-at-top
 
-  return inline_model_runner.InlineModelRunner(
-      tf.saved_model.load(os.environ['MODEL_PATH'])
-  )
+    return inline_model_runner.InlineModelRunner(
+        tf.saved_model.load(os.environ["MODEL_PATH"])
+    )
 
 
 def main(argv: Sequence[str]) -> None:
-  if len(argv) > 1:
-    raise app.UsageError('Too many command-line arguments.')
-  options = {
-      'bind': f'0.0.0.0:{int(os.environ["AIP_HTTP_PORT"])}',
-      # Each worker holds its own model copy in memory; one is enough for dev.
-      'workers': 1,
-      'timeout': 120,
-  }
-  logging.info('Launching local gunicorn application.')
-  server_gunicorn.PredictionApplication(
-      inline_prediction_executor.InlinePredictionExecutor(
-          predictor.Predictor().predict, _load_model_runner
-      ),
-      # No separate model server: the model loads before the worker serves.
-      health_check=None,
-      options=options,
-  ).run()
+    if len(argv) > 1:
+        raise app.UsageError("Too many command-line arguments.")
+    options = {
+        "bind": f"0.0.0.0:{int(os.environ['AIP_HTTP_PORT'])}",
+        # Each worker holds its own model copy in memory; one is enough for dev.
+        "workers": 1,
+        "timeout": 120,
+    }
+    logging.info("Launching local gunicorn application.")
+    server_gunicorn.PredictionApplication(
+        inline_prediction_executor.InlinePredictionExecutor(
+            predictor.Predictor().predict, _load_model_runner
+        ),
+        # No separate model server: the model loads before the worker serves.
+        health_check=None,
+        options=options,
+    ).run()
 
 
-if __name__ == '__main__':
-  app.run(main)
+if __name__ == "__main__":
+    app.run(main)

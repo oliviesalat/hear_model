@@ -29,7 +29,9 @@ from server.schemas import (
     PredictResponse,
 )
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +51,9 @@ app = FastAPI(title="HeAR embeddings", lifespan=lifespan)
 
 @app.exception_handler(RequestValidationError)
 async def bad_request(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return JSONResponse({"error": "Body must be JSON with an `instances` list."}, status_code=400)
+    return JSONResponse(
+        {"error": "Body must be JSON with an `instances` list."}, status_code=400
+    )
 
 
 @app.exception_handler(Exception)
@@ -65,7 +69,9 @@ def demo() -> FileResponse:
 
 
 @app.post("/demo/predict", response_model=DemoResult, include_in_schema=False)
-def demo_predict(request: Request, wav: bytes = Body(media_type="audio/wav")) -> DemoResult:
+def demo_predict(
+    request: Request, wav: bytes = Body(media_type="audio/wav")
+) -> DemoResult:
     """Embeds a raw WAV of any length the way the PyTorch quick start notebook does.
 
     Kept apart from /predict, whose contract (exactly 2 s per clip) mirrors the upstream server.
@@ -92,7 +98,9 @@ def health() -> str:
 @app.post("/predict", response_model=PredictResponse)
 def predict(body: PredictRequest, request: Request) -> PredictResponse:
     """Returns one HeAR embedding per instance."""
-    predictions: list[EmbeddingResult | ErrorResult | None] = [None] * len(body.instances)
+    predictions: list[EmbeddingResult | ErrorResult | None] = [None] * len(
+        body.instances
+    )
     clips: list[np.ndarray] = []
     clip_positions: list[int] = []
     for position, instance in enumerate(body.instances):
@@ -101,7 +109,9 @@ def predict(body: PredictRequest, request: Request) -> PredictResponse:
             clip_positions.append(position)
         except InstanceError as error:
             predictions[position] = ErrorResult(
-                error=ErrorDetail(description=f"Failed to get prediction for instance. Reason: {error}")
+                error=ErrorDetail(
+                    description=f"Failed to get prediction for instance. Reason: {error}"
+                )
             )
 
     if clips:

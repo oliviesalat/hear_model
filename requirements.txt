@@ -110,3 +110,5 @@ librosa
 scikit-learn
 matplotlib
 ipython
+
+pydantic

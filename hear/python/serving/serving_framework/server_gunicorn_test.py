@@ -26,205 +26,193 @@ from serving.serving_framework import server_gunicorn
 
 
 class DummyHealthCheck:
+    def __init__(self, check_result: bool):
+        self._check_result = check_result
 
-  def __init__(self, check_result: bool):
-    self._check_result = check_result
-
-  def check_health(self):
-    return self._check_result
+    def check_health(self):
+        return self._check_result
 
 
 class ServerGunicornTest(absltest.TestCase):
+    def setUp(self):
+        super().setUp()
+        os.environ["AIP_PREDICT_ROUTE"] = "/fake-predict-route"
+        os.environ["AIP_HEALTH_ROUTE"] = "/fake-health-route"
 
-  def setUp(self):
-    super().setUp()
-    os.environ["AIP_PREDICT_ROUTE"] = "/fake-predict-route"
-    os.environ["AIP_HEALTH_ROUTE"] = "/fake-health-route"
+    def test_application_option_default(self):
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
 
-  def test_application_option_default(self):
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
+        app = server_gunicorn.PredictionApplication(executor, health_check=None)
 
-    app = server_gunicorn.PredictionApplication(executor, health_check=None)
+        self.assertEqual(app.cfg.workers, 1)
 
-    self.assertEqual(app.cfg.workers, 1)
+    def test_application_option_setting(self):
+        options = {
+            "workers": 3,
+        }
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
 
-  def test_application_option_setting(self):
-    options = {
-        "workers": 3,
-    }
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
+        app = server_gunicorn.PredictionApplication(
+            executor, options=options, health_check=None
+        )
 
-    app = server_gunicorn.PredictionApplication(
-        executor, options=options, health_check=None
-    )
+        self.assertEqual(app.cfg.workers, 3)
 
-    self.assertEqual(app.cfg.workers, 3)
+    def test_health_route_no_check(self):
 
-  def test_health_route_no_check(self):
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
 
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
+        app = server_gunicorn.PredictionApplication(executor, health_check=None).load()
+        service = app.test_client()
 
-    app = server_gunicorn.PredictionApplication(
-        executor, health_check=None
-    ).load()
-    service = app.test_client()
+        response = service.get("/fake-health-route")
 
-    response = service.get("/fake-health-route")
+        self.assertEqual(response.status_code, http.HTTPStatus.OK)
+        self.assertEqual(response.text, "ok")
 
-    self.assertEqual(response.status_code, http.HTTPStatus.OK)
-    self.assertEqual(response.text, "ok")
+    @requests_mock.Mocker()
+    def test_health_route_pass_check(self, mock_requests):
+        mock_requests.register_uri(
+            "GET",
+            "http://localhost:12345/v1/models/default",
+            text="assorted_metadata",
+            status_code=http.HTTPStatus.OK,
+        )
 
-  @requests_mock.Mocker()
-  def test_health_route_pass_check(self, mock_requests):
-    mock_requests.register_uri(
-        "GET",
-        "http://localhost:12345/v1/models/default",
-        text="assorted_metadata",
-        status_code=http.HTTPStatus.OK,
-    )
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
 
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
+        app = server_gunicorn.PredictionApplication(
+            executor,
+            health_check=server_gunicorn.ModelServerHealthCheck(12345, "default"),
+        ).load()
+        service = app.test_client()
 
-    app = server_gunicorn.PredictionApplication(
-        executor,
-        health_check=server_gunicorn.ModelServerHealthCheck(12345, "default"),
-    ).load()
-    service = app.test_client()
+        response = service.get("/fake-health-route")
 
-    response = service.get("/fake-health-route")
+        self.assertEqual(response.status_code, http.HTTPStatus.OK)
+        self.assertEqual(response.text, "ok")
 
-    self.assertEqual(response.status_code, http.HTTPStatus.OK)
-    self.assertEqual(response.text, "ok")
+    @requests_mock.Mocker()
+    def test_health_route_fail_check(self, mock_requests):
+        mock_requests.register_uri(
+            "GET",
+            "http://localhost:12345/v1/models/default",
+            exc=requests.exceptions.ConnectionError,
+        )
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
 
-  @requests_mock.Mocker()
-  def test_health_route_fail_check(self, mock_requests):
-    mock_requests.register_uri(
-        "GET",
-        "http://localhost:12345/v1/models/default",
-        exc=requests.exceptions.ConnectionError,
-    )
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
+        app = server_gunicorn.PredictionApplication(
+            executor,
+            health_check=server_gunicorn.ModelServerHealthCheck(12345, "default"),
+        ).load()
+        service = app.test_client()
 
-    app = server_gunicorn.PredictionApplication(
-        executor,
-        health_check=server_gunicorn.ModelServerHealthCheck(12345, "default"),
-    ).load()
-    service = app.test_client()
+        response = service.get("/fake-health-route")
 
-    response = service.get("/fake-health-route")
+        self.assertEqual(response.status_code, http.HTTPStatus.SERVICE_UNAVAILABLE)
+        self.assertEqual(response.text, "not ok")
 
-    self.assertEqual(response.status_code, http.HTTPStatus.SERVICE_UNAVAILABLE)
-    self.assertEqual(response.text, "not ok")
+    def test_predict_route_no_json(self):
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
+        app = server_gunicorn.PredictionApplication(executor, health_check=None).load()
+        service = app.test_client()
 
-  def test_predict_route_no_json(self):
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
-    app = server_gunicorn.PredictionApplication(
-        executor, health_check=None
-    ).load()
-    service = app.test_client()
+        response = service.post("/fake-predict-route", data="invalid")
 
-    response = service.post("/fake-predict-route", data="invalid")
+        executor.start.assert_called_once()
+        executor.execute.assert_not_called()
+        self.assertEqual(response.status_code, http.HTTPStatus.BAD_REQUEST)
+        self.assertDictEqual({"error": "No JSON body."}, response.get_json())
 
-    executor.start.assert_called_once()
-    executor.execute.assert_not_called()
-    self.assertEqual(response.status_code, http.HTTPStatus.BAD_REQUEST)
-    self.assertDictEqual({"error": "No JSON body."}, response.get_json())
+    def test_predict_route(self):
+        executor = mock.create_autospec(
+            server_gunicorn.PredictionExecutor,
+            instance=True,
+        )
+        app = server_gunicorn.PredictionApplication(executor, health_check=None).load()
+        service = app.test_client()
+        executor.execute.return_value = {"placeholder": "output"}
 
-  def test_predict_route(self):
-    executor = mock.create_autospec(
-        server_gunicorn.PredictionExecutor,
-        instance=True,
-    )
-    app = server_gunicorn.PredictionApplication(
-        executor, health_check=None
-    ).load()
-    service = app.test_client()
-    executor.execute.return_value = {"placeholder": "output"}
+        response = service.post("/fake-predict-route", json={"meaningless": "filler"})
 
-    response = service.post(
-        "/fake-predict-route", json={"meaningless": "filler"}
-    )
+        executor.start.assert_called_once()
+        executor.execute.assert_called_once_with({"meaningless": "filler"})
+        self.assertEqual(response.status_code, http.HTTPStatus.OK)
+        self.assertDictEqual({"placeholder": "output"}, response.get_json())
 
-    executor.start.assert_called_once()
-    executor.execute.assert_called_once_with({"meaningless": "filler"})
-    self.assertEqual(response.status_code, http.HTTPStatus.OK)
-    self.assertDictEqual({"placeholder": "output"}, response.get_json())
+    def test_subprocess_executor_execute(self):
+        mock_process = mock.create_autospec(subprocess.Popen, instance=True)
+        with mock.patch.object(
+            subprocess, "Popen", autospec=True, return_value=mock_process
+        ) as mock_popen:
+            executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
+            executor.start()
+            mock_popen.assert_called_once_with(
+                args=["fake_command"],
+                stdout=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+            )
+        mock_process.stdout = io.BytesIO(b'{"placeholder": "output"}\n')
+        mock_process.stdin = io.BytesIO()
 
-  def test_subprocess_executor_execute(self):
-    mock_process = mock.create_autospec(subprocess.Popen, instance=True)
-    with mock.patch.object(
-        subprocess, "Popen", autospec=True, return_value=mock_process
-    ) as mock_popen:
-      executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
-      executor.start()
-      mock_popen.assert_called_once_with(
-          args=["fake_command"],
-          stdout=subprocess.PIPE,
-          stdin=subprocess.PIPE,
-      )
-    mock_process.stdout = io.BytesIO(b'{"placeholder": "output"}\n')
-    mock_process.stdin = io.BytesIO()
+        response = executor.execute({"meaningless": "filler"})
 
-    response = executor.execute({"meaningless": "filler"})
+        self.assertEqual(b'{"meaningless": "filler"}\n', mock_process.stdin.getvalue())
+        self.assertDictEqual({"placeholder": "output"}, response)
 
-    self.assertEqual(
-        b'{"meaningless": "filler"}\n', mock_process.stdin.getvalue()
-    )
-    self.assertDictEqual({"placeholder": "output"}, response)
+    def test_subprocess_executor_execute_error_output_closed(self):
+        mock_process = mock.create_autospec(subprocess.Popen, instance=True)
+        with mock.patch.object(
+            subprocess, "Popen", autospec=True, return_value=mock_process
+        ) as mock_popen:
+            executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
+            executor.start()
 
-  def test_subprocess_executor_execute_error_output_closed(self):
-    mock_process = mock.create_autospec(subprocess.Popen, instance=True)
-    with mock.patch.object(
-        subprocess, "Popen", autospec=True, return_value=mock_process
-    ) as mock_popen:
-      executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
-      executor.start()
+            mock_process.stdout = io.BytesIO()  # empty output simulates closed pipe.
+            mock_process.stdin = io.BytesIO()
 
-      mock_process.stdout = io.BytesIO()  # empty output simulates closed pipe.
-      mock_process.stdin = io.BytesIO()
+            with self.assertRaises(RuntimeError) as raised:
+                executor.execute({"meaningless": "filler"})
+            self.assertEqual(
+                raised.exception.args[0], "Executor process output stream closed."
+            )
+            self.assertEqual(mock_popen.call_count, 2)  # executor restarted.
 
-      with self.assertRaises(RuntimeError) as raised:
-        executor.execute({"meaningless": "filler"})
-      self.assertEqual(
-          raised.exception.args[0], "Executor process output stream closed."
-      )
-      self.assertEqual(mock_popen.call_count, 2)  # executor restarted.
+    def test_subprocess_executor_execute_error_input_broken(self):
+        mock_process = mock.create_autospec(subprocess.Popen, instance=True)
+        with mock.patch.object(
+            subprocess, "Popen", autospec=True, return_value=mock_process
+        ) as mock_popen:
+            executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
+            executor.start()
 
-  def test_subprocess_executor_execute_error_input_broken(self):
-    mock_process = mock.create_autospec(subprocess.Popen, instance=True)
-    with mock.patch.object(
-        subprocess, "Popen", autospec=True, return_value=mock_process
-    ) as mock_popen:
-      executor = server_gunicorn.SubprocessPredictionExecutor(["fake_command"])
-      executor.start()
+            mock_process.stdout = io.BytesIO(b'{"placeholder": "output"}\n')
+            # Simulate broken pipe.
+            mock_process.stdin = mock.create_autospec(io.BytesIO, instance=True)
+            mock_process.stdin.write.side_effect = BrokenPipeError
 
-      mock_process.stdout = io.BytesIO(b'{"placeholder": "output"}\n')
-      # Simulate broken pipe.
-      mock_process.stdin = mock.create_autospec(io.BytesIO, instance=True)
-      mock_process.stdin.write.side_effect = BrokenPipeError
-
-      with self.assertRaises(RuntimeError):
-        executor.execute({"meaningless": "filler"})
-      self.assertEqual(mock_popen.call_count, 2)  # executor restarted.
+            with self.assertRaises(RuntimeError):
+                executor.execute({"meaningless": "filler"})
+            self.assertEqual(mock_popen.call_count, 2)  # executor restarted.
 
 
 if __name__ == "__main__":
-  absltest.main()
+    absltest.main()

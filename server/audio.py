@@ -33,7 +33,9 @@ def instance_to_clip(instance: dict[str, Any]) -> np.ndarray:
         InstanceError: The instance is malformed or the audio is not 2 s long.
     """
     if "gcs_uri" in instance:
-        raise InstanceError("gcs_uri is not supported, send input_bytes or input_array.")
+        raise InstanceError(
+            "gcs_uri is not supported, send input_bytes or input_array."
+        )
     if set(instance) not in ({"input_array"}, {"input_bytes"}):
         raise InstanceError(
             "Request has incorrectly formatted audio input keys. "
@@ -50,13 +52,17 @@ def _parse_array(values: Any) -> np.ndarray:
     except (TypeError, ValueError) as error:
         raise InstanceError("input_array must be a list of numbers.") from error
     if clip.ndim != 1:
-        raise InstanceError(f"Audio array must have 1 dimension. Got {clip.ndim} dimensions.")
+        raise InstanceError(
+            f"Audio array must have 1 dimension. Got {clip.ndim} dimensions."
+        )
     return _check_length(clip)
 
 
 def _decode_wav(wav_base64: Any) -> np.ndarray:
     try:
-        sample_rate, audio = wavfile.read(io.BytesIO(base64.b64decode(wav_base64, validate=True)))
+        sample_rate, audio = wavfile.read(
+            io.BytesIO(base64.b64decode(wav_base64, validate=True))
+        )
     except (binascii.Error, TypeError, ValueError) as error:
         raise InstanceError("input_bytes must be a base64-encoded WAV file.") from error
 
@@ -110,7 +116,9 @@ def wav_to_notebook_clip(wav: bytes) -> NotebookClip:
     except ValueError as error:
         raise InstanceError("Body must be a WAV file.") from error
     channels = 1 if audio.ndim == 1 else audio.shape[1]
-    resampled = resample_audio_and_convert_to_mono(audio, sample_rate, SAMPLE_RATE)[:CLIP_SAMPLES]
+    resampled = resample_audio_and_convert_to_mono(audio, sample_rate, SAMPLE_RATE)[
+        :CLIP_SAMPLES
+    ]
     # The notebook keeps the int scale; preprocess_audio min-max scales each clip to [-1, 1], so it does not matter.
     clip = np.zeros(CLIP_SAMPLES, dtype=np.float32)
     clip[: len(resampled)] = resampled

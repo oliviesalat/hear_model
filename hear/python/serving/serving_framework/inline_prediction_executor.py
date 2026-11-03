@@ -33,59 +33,57 @@ from serving.serving_framework import server_gunicorn
 
 
 class InlinePredictionExecutor(server_gunicorn.PredictionExecutor):
-  """Provides prediction request execution using an inline function.
+    """Provides prediction request execution using an inline function.
 
-  Provides a little framing to simplify the use of predictor functions in the
-  server worker process.
+    Provides a little framing to simplify the use of predictor functions in the
+    server worker process.
 
-  If a function call with no setup is insufficient, overriding the start and
-  predict methods here can be used to provide more complex behavior. Inheritance
-  directly from PredictionExecutor is also an option.
-  """
-
-  def __init__(
-      self,
-      predictor: Callable[
-          [dict[str, Any], model_runner.ModelRunner], dict[str, Any]
-      ],
-      model_runner_source: Callable[[], model_runner.ModelRunner]
-  ):
-    self._predictor = predictor
-    self._model_runner = None
-    self._model_runner_source = model_runner_source
-
-  @override
-  def start(self) -> None:
-    """Starts the executor.
-
-    Called after the Gunicorn worker process has started. Performs any setup
-    which needs to be done post-fork.
+    If a function call with no setup is insufficient, overriding the start and
+    predict methods here can be used to provide more complex behavior. Inheritance
+    directly from PredictionExecutor is also an option.
     """
-    # Safer to instantiate the RPC stub post-fork.
-    self._model_runner = self._model_runner_source()
 
-  def predict(self, input_json: dict[str, Any]) -> dict[str, Any]:
-    """Executes the given request payload."""
-    if self._model_runner is None:
-      raise RuntimeError(
-          "Model runner is not initialized. Please call start() first."
-      )
-    return self._predictor(input_json, self._model_runner)
+    def __init__(
+        self,
+        predictor: Callable[[dict[str, Any], model_runner.ModelRunner], dict[str, Any]],
+        model_runner_source: Callable[[], model_runner.ModelRunner],
+    ):
+        self._predictor = predictor
+        self._model_runner = None
+        self._model_runner_source = model_runner_source
 
-  @override
-  def execute(self, input_json: dict[str, Any]) -> dict[str, Any]:
-    """Executes the given request payload.
+    @override
+    def start(self) -> None:
+        """Starts the executor.
 
-    Args:
-      input_json: The full json prediction request payload.
+        Called after the Gunicorn worker process has started. Performs any setup
+        which needs to be done post-fork.
+        """
+        # Safer to instantiate the RPC stub post-fork.
+        self._model_runner = self._model_runner_source()
 
-    Returns:
-      The json response to the prediction request.
+    def predict(self, input_json: dict[str, Any]) -> dict[str, Any]:
+        """Executes the given request payload."""
+        if self._model_runner is None:
+            raise RuntimeError(
+                "Model runner is not initialized. Please call start() first."
+            )
+        return self._predictor(input_json, self._model_runner)
 
-    Raises:
-      RuntimeError: Prediction failed in an unhandled way.
-    """
-    try:
-      return self.predict(input_json)
-    except Exception as e:
-      raise RuntimeError("Unhandled exception from predictor.") from e
+    @override
+    def execute(self, input_json: dict[str, Any]) -> dict[str, Any]:
+        """Executes the given request payload.
+
+        Args:
+          input_json: The full json prediction request payload.
+
+        Returns:
+          The json response to the prediction request.
+
+        Raises:
+          RuntimeError: Prediction failed in an unhandled way.
+        """
+        try:
+            return self.predict(input_json)
+        except Exception as e:
+            raise RuntimeError("Unhandled exception from predictor.") from e

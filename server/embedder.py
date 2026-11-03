@@ -50,6 +50,10 @@ class Embedder:
         chunks = []
         with self._lock, torch.inference_mode():
             for start in range(0, len(clips), self._max_batch):
-                audio = torch.from_numpy(clips[start : start + self._max_batch]).to(self.device)
-                chunks.append(self._model(preprocess_audio(audio)).pooler_output.cpu().numpy())
+                audio = torch.from_numpy(clips[start : start + self._max_batch]).to(
+                    self.device
+                )
+                chunks.append(
+                    self._model(preprocess_audio(audio)).pooler_output.cpu().numpy()
+                )
         return np.concatenate(chunks)

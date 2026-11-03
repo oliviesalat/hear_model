@@ -81,8 +81,16 @@ cos = lambda a, b: float((a * b).sum() / np.linalg.norm(a) / np.linalg.norm(b))
 
 model = AutoModel.from_pretrained("google/hear-pytorch").eval()
 with torch.inference_mode():
-    alone = model(audio_utils.preprocess_audio(torch.from_numpy(quiet[None]))).pooler_output[0].numpy()
-    batched = model(audio_utils.preprocess_audio(torch.from_numpy(np.stack([quiet, loud])))).pooler_output[0].numpy()
+    alone = (
+        model(audio_utils.preprocess_audio(torch.from_numpy(quiet[None])))
+        .pooler_output[0]
+        .numpy()
+    )
+    batched = (
+        model(audio_utils.preprocess_audio(torch.from_numpy(np.stack([quiet, loud]))))
+        .pooler_output[0]
+        .numpy()
+    )
 print("torch: alone vs in batch", cos(alone, batched))  # 0.918
 
 tf_model = tf.saved_model.load(snapshot_download("google/hear"))
@@ -90,7 +98,7 @@ serve = tf_model.signatures["serving_default"]
 tf_alone = serve(x=tf.constant(quiet[None]))["output_0"].numpy()[0]
 tf_batched = serve(x=tf.constant(np.stack([quiet, loud])))["output_0"].numpy()[0]
 print("tf: alone vs in batch", cos(tf_alone, tf_batched))  # 1.0
-print("torch in batch vs tf", cos(batched, tf_alone))      # 0.918
+print("torch in batch vs tf", cos(batched, tf_alone))  # 0.918
 
 audio = torch.rand((2, 32000)) * 0.1
 before = audio.clone()

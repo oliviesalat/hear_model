@@ -25,114 +25,114 @@ import numpy as np
 
 
 class ModelRunner(abc.ABC):
-  """Runs a model with tensor inputs and outputs."""
+    """Runs a model with tensor inputs and outputs."""
 
-  @abc.abstractmethod
-  def run_model_multiple_output(
-      self,
-      model_input: Mapping[str, np.ndarray] | np.ndarray,
-      *,
-      model_name: str = "default",
-      model_version: int | None = None,
-      model_output_keys: Set[str],
-  ) -> Mapping[str, np.ndarray]:
-    """Runs a model on the given input and returns multiple outputs.
+    @abc.abstractmethod
+    def run_model_multiple_output(
+        self,
+        model_input: Mapping[str, np.ndarray] | np.ndarray,
+        *,
+        model_name: str = "default",
+        model_version: int | None = None,
+        model_output_keys: Set[str],
+    ) -> Mapping[str, np.ndarray]:
+        """Runs a model on the given input and returns multiple outputs.
 
-    Args:
-      model_input: An array or map of arrays comprising the input tensors for
-        the model. A bare array is given a default input key.
-      model_name: The name of the model to run.
-      model_version: The version of the model to run. Uses default if None.
-      model_output_keys: The desired model output keys.
+        Args:
+          model_input: An array or map of arrays comprising the input tensors for
+            the model. A bare array is given a default input key.
+          model_name: The name of the model to run.
+          model_version: The version of the model to run. Uses default if None.
+          model_output_keys: The desired model output keys.
 
-    Returns:
-      A mapping of model output keys to tensors.
-    """
+        Returns:
+          A mapping of model output keys to tensors.
+        """
 
-  def run_model(
-      self,
-      model_input: Mapping[str, np.ndarray] | np.ndarray,
-      *,
-      model_name: str = "default",
-      model_version: int | None = None,
-      model_output_key: str = "output_0",
-  ) -> np.ndarray:
-    """Runs a model on the given input.
+    def run_model(
+        self,
+        model_input: Mapping[str, np.ndarray] | np.ndarray,
+        *,
+        model_name: str = "default",
+        model_version: int | None = None,
+        model_output_key: str = "output_0",
+    ) -> np.ndarray:
+        """Runs a model on the given input.
 
-    Args:
-      model_input: An array or map of arrays comprising the input tensors for
-        the model.  A bare array is given a default input key.
-      model_name: The name of the model to run.
-      model_version: The version of the model to run. Uses default if None.
-      model_output_key: The key to pull the output from. Defaults to "output_0".
+        Args:
+          model_input: An array or map of arrays comprising the input tensors for
+            the model.  A bare array is given a default input key.
+          model_name: The name of the model to run.
+          model_version: The version of the model to run. Uses default if None.
+          model_output_key: The key to pull the output from. Defaults to "output_0".
 
-    Returns:
-      The single output tensor.
-    """
-    return self.run_model_multiple_output(
-        model_input,
-        model_name=model_name,
-        model_version=model_version,
-        model_output_keys={model_output_key},
-    )[model_output_key]
-
-  def batch_model(
-      self,
-      model_inputs: Sequence[Mapping[str, np.ndarray]] | Sequence[np.ndarray],
-      *,
-      model_name: str = "default",
-      model_version: int | None = None,
-      model_output_key: str = "output_0",
-  ) -> list[np.ndarray]:
-    """Runs a model on each of the given inputs.
-
-    Args:
-      model_inputs: A sequence of arrays or maps of arrays comprising the input
-        tensors for the model.  Bare arrays are given a default input key.
-      model_name: The name of the model to run.
-      model_version: The version of the model to run. Uses default if None.
-      model_output_key: The key to pull the output from. Defaults to "output_0".
-
-    Returns:
-      A list of the single output tensor from each input.
-    """
-    return [
-        self.run_model(
+        Returns:
+          The single output tensor.
+        """
+        return self.run_model_multiple_output(
             model_input,
             model_name=model_name,
             model_version=model_version,
-            model_output_key=model_output_key,
-        )
-        for model_input in model_inputs
-    ]
+            model_output_keys={model_output_key},
+        )[model_output_key]
 
-  def batch_model_multiple_output(
-      self,
-      model_inputs: Sequence[Mapping[str, np.ndarray]] | Sequence[np.ndarray],
-      *,
-      model_name: str = "default",
-      model_version: int | None = None,
-      model_output_keys: Set[str],
-  ) -> list[Mapping[str, np.ndarray]]:
-    """Runs a model on the given inputs and returns multiple outputs.
+    def batch_model(
+        self,
+        model_inputs: Sequence[Mapping[str, np.ndarray]] | Sequence[np.ndarray],
+        *,
+        model_name: str = "default",
+        model_version: int | None = None,
+        model_output_key: str = "output_0",
+    ) -> list[np.ndarray]:
+        """Runs a model on each of the given inputs.
 
-    Args:
-      model_inputs: An array or map of arrays comprising the input tensors for
-        the model. Bare arrays are given a default input key.
-      model_name: The name of the model to run.
-      model_version: The version of the model to run. Uses default if None.
-      model_output_keys: The desired model output keys.
+        Args:
+          model_inputs: A sequence of arrays or maps of arrays comprising the input
+            tensors for the model.  Bare arrays are given a default input key.
+          model_name: The name of the model to run.
+          model_version: The version of the model to run. Uses default if None.
+          model_output_key: The key to pull the output from. Defaults to "output_0".
 
-    Returns:
-      A list containing the mapping of model output keys to tensors from each
-      input.
-    """
-    return [
-        self.run_model_multiple_output(
-            model_input,
-            model_name=model_name,
-            model_version=model_version,
-            model_output_keys=model_output_keys,
-        )
-        for model_input in model_inputs
-    ]
+        Returns:
+          A list of the single output tensor from each input.
+        """
+        return [
+            self.run_model(
+                model_input,
+                model_name=model_name,
+                model_version=model_version,
+                model_output_key=model_output_key,
+            )
+            for model_input in model_inputs
+        ]
+
+    def batch_model_multiple_output(
+        self,
+        model_inputs: Sequence[Mapping[str, np.ndarray]] | Sequence[np.ndarray],
+        *,
+        model_name: str = "default",
+        model_version: int | None = None,
+        model_output_keys: Set[str],
+    ) -> list[Mapping[str, np.ndarray]]:
+        """Runs a model on the given inputs and returns multiple outputs.
+
+        Args:
+          model_inputs: An array or map of arrays comprising the input tensors for
+            the model. Bare arrays are given a default input key.
+          model_name: The name of the model to run.
+          model_version: The version of the model to run. Uses default if None.
+          model_output_keys: The desired model output keys.
+
+        Returns:
+          A list containing the mapping of model output keys to tensors from each
+          input.
+        """
+        return [
+            self.run_model_multiple_output(
+                model_input,
+                model_name=model_name,
+                model_version=model_version,
+                model_output_keys=model_output_keys,
+            )
+            for model_input in model_inputs
+        ]

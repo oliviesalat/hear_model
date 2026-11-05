@@ -15,7 +15,6 @@ def cosine_similarity(first_vector: np.ndarray, second_vector: np.ndarray) -> fl
 
 def cosine_to_degrees(cosine: float) -> float:
     """Returns the angle in degrees for a given cosine."""
-    # float rounding can push cosine slightly outside [-1, 1], where arccos returns nan
     return float(np.degrees(np.arccos(np.clip(cosine, -1.0, 1.0))))
 
 
@@ -34,7 +33,6 @@ def print_similarity_matrix(title: str, vectors_by_name: dict[str, np.ndarray]) 
     row_label_width = max(len(name) for name in names)
     cell_width = 14
     print(f"\n{title}")
-    # column headers are truncated so the table fits a terminal; full names are in the row labels
     print(" " * row_label_width + "".join(f"{name[:cell_width - 1]:>{cell_width}}" for name in names))
     for row_name in names:
         cells = []
